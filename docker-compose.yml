@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: beehub
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    volumes:
+      - data:/var/lib/mysql
+    networks:
+      - app-network
+    restart: always
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "8080:80"
+    networks:
+      - app-network
+    restart: always
+
+  backend:
+    build:
+      context: ./beehub-backend
+      dockerfile: Dockerfile
+    image: backend
+    ports:
+      - "8082:80"
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./beehubweb
+      dockerfile: Dockerfile
+    image: frontend
+    ports:
+      - "8083:80"
+    networks:
+      - app-network
+    restart: always
+
+volumes:
+  data:
+
+networks:
+  app-network:
+    driver: bridge
