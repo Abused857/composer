@@ -1,4 +1,69 @@
+version: '3.8'
+
 services:
+  traefik:
+    image: traefik:v2.6
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=german.martinez@incentro.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"     # HTTP
+      - "443:443"   # HTTPS
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "traefik-config:/etc/traefik"
+      - "traefik-data:/letsencrypt"
+    networks:
+      - app-network
+    restart: always
+
+  frontend:
+    build:
+      context: ./beehubweb
+      dockerfile: Dockerfile
+    image: frontend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`dev.beehub.cloud`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    networks:
+      - app-network
+    restart: always
+
+  backend:
+    build:
+      context: ./beehub-backend
+      dockerfile: Dockerfile
+    image: backend
+    depends_on:
+      - db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`dev.beehub.cloud`) && PathPrefix(`/api`)"
+      - "traefik.http.services.backend.loadbalancer.server.port=80"
+    networks:
+      - app-network
+    restart: always
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: rootpassword
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`dev.beehub.cloud`) && PathPrefix(`/phpmyadmin`)"
+      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+    networks:
+      - app-network
+    restart: always
+
   db:
     image: mysql
     environment:
@@ -11,46 +76,13 @@ services:
     networks:
       - app-network
     restart: always
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-      MYSQL_ROOT_PASSWORD: rootpassword
-    ports:
-      - "8080:80"
-    networks:
-      - app-network
-    restart: always
-
-  backend:
-    build:
-      context: ./beehub-backend
-      dockerfile: Dockerfile
-    image: backend
-    ports:
-      - "8082:80"
-    depends_on:
-      - db
-    networks:
-      - app-network
-    restart: always
-
-  frontend:
-    build:
-      context: ./beehubweb
-      dockerfile: Dockerfile
-    image: frontend
-    ports:
-      - "8083:80"
-    networks:
-      - app-network
-    restart: always
-
-volumes:
-  data:
+  
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  data:
+  traefik-config:
+  traefik-data:
